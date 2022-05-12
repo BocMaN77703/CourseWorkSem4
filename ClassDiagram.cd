@@ -1,0 +1,71 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<ClassDiagram MajorVersion="1" MinorVersion="1">
+  <Class Name="Reader">
+    <Position X="0.5" Y="4.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAACAAAAgAAIAAAAAAgAAAAACAAAAABAAAAAAAAA=</HashCode>
+      <FileName>Reader.h</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="Convertation">
+    <Position X="1" Y="2.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAgAAAAAAAAAQAAAAAAAAAAEAAAAAAAAA=</HashCode>
+      <FileName>Convertation.h</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="Disk">
+    <Position X="2.75" Y="3" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AEAEBAAAAAAADAAAAAAABAAAAAAAAGCAQAAAAEAAAAA=</HashCode>
+      <FileName>Disk.h</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="FileInfo" Collapsed="true">
+    <Position X="5" Y="2.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>BAAAAIBCAIAAAAggAIBAAAAAARAAAAAAAEAAAAAAAQA=</HashCode>
+      <FileName>FileInfo.h</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="FileLfn" Collapsed="true">
+    <Position X="5" Y="1.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAABAAAAAAAAgAAAAAQAAAAAAAAAgAAAAAAAAAQI=</HashCode>
+      <FileName>FileLfn.h</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="FileSystem">
+    <Position X="15.25" Y="1.75" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>ABYAAAmAAAEIAAAIAAgAAEACAwAgAAAAJAEIAAAQBAA=</HashCode>
+      <FileName>FileSystem.h</FileName>
+    </TypeIdentifier>
+    <ShowAsAssociation>
+      <Field Name="bootSector" />
+      <Field Name="reader" />
+    </ShowAsAssociation>
+  </Class>
+  <Class Name="Menu">
+    <Position X="8.5" Y="1.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAABAgAAAAAAAAAAAAAAIAAACAAAAAAAAAAA=</HashCode>
+      <FileName>Menu.h</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="SystemInfo">
+    <Position X="5" Y="4.25" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAEAAAAAAAAAAAIAAAACAAgAAAAAAIAAAEABgAA=</HashCode>
+      <FileName>SystemInfo.h</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Struct Name="BootSector">
+    <Position X="11" Y="3.25" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAMAAgAAAAAAAAAAAAAgAgAAAAAAABEIAIAAAA=</HashCode>
+      <FileName>BootSector.h</FileName>
+    </TypeIdentifier>
+  </Struct>
+  <Font Name="Segoe UI" Size="9" />
+</ClassDiagram>

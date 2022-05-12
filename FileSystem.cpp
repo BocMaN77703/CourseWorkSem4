@@ -1,0 +1,219 @@
+#include "pch.h"
+#include "FileSystem.h"
+#include "Convertation.h"
+#include <iostream>
+#include <algorithm>
+#include "FileLfn.h"
+#include <list>
+
+void FileSystem::parseBootSector(UCHAR * info)
+{
+	Convertation conversion;
+	bootSector.bytesInSector = conversion.convert(info, 11, 12);
+	bootSector.sectorsInCluster = conversion.convert(info, 13, 13);
+	bootSector.reservedAreaSize = conversion.convert(info, 14, 15);
+	bootSector.fatCopiesNumber = conversion.convert(info, 16, 16);
+	bootSector.sectorsInFS16 = conversion.convert(info, 19, 20);
+	bootSector.sectorsInFS32 = conversion.convert(info, 32, 35);
+	bootSector.fatSize = conversion.convert(info, 36, 39);
+	bootSector.numberOfUpdateFat = conversion.convert(info, 40, 41);
+	bootSector.clusterOfRootDirectory = conversion.convert(info, 44, 47);
+}
+
+void FileSystem::parseFatTable(UCHAR * buffer, int size)
+{
+	for (int i = 0; i < size; ++i) {
+		UINT32 temp = 0;
+		for (int j = 3; j >= 0; --j) {
+			temp = temp << 8;
+			UCHAR c = buffer[i * 4 + j];
+			temp+=buffer[i * 4 + j];
+			
+		}
+		
+		fatTable[i] = temp;
+	}
+}
+
+void FileSystem::getFileInfo(UINT32 offset, FileInfo& file)
+{
+	file.createFileName(rootDirectory + offset);
+	file.createFirstCluster(rootDirectory+offset);
+	file.createSize(rootDirectory + offset);
+}
+
+
+int FileSystem::getStartSectorOfActiveFat()
+{
+	int numberOfActiveFat = bootSector.fatCopiesNumber, startSector= bootSector.reservedAreaSize;
+	if ((bootSector.numberOfUpdateFat & 128) == 0) {
+		numberOfActiveFat = bootSector.numberOfUpdateFat;
+		numberOfActiveFat &= 15;
+	}
+	if (numberOfActiveFat != bootSector.fatCopiesNumber) startSector += numberOfActiveFat * bootSector.fatSize;
+	return startSector;
+
+}
+
+list<int> FileSystem::getFileClusters(const FileInfo& file)
+{
+	list<int> clusters;
+	int clusterNumber = file.getSize() / (bootSector.sectorsInCluster*bootSector.bytesInSector) + 1;
+	int startCluster = file.getFirstCluster();
+	for (int i = 0; i < clusterNumber; i++) {
+		int cluster = startCluster;
+		clusters.push_back(cluster);
+		while (fatTable[startCluster++]);
+	}
+	return clusters;
+}
+
+list<int> FileSystem::getRootDirectoryClusters()
+{
+	list<int> rootDirectoryClusters;
+	int currentCluster = bootSector.clusterOfRootDirectory;
+	while (currentCluster < 0xffffff7) {
+		rootDirectoryClusters.push_back(currentCluster);
+		currentCluster = fatTable[currentCluster];
+	}
+	return rootDirectoryClusters;
+}
+
+
+void FileSystem::createFatTable()
+{
+	int numberOfFatRecords=0;
+	int startFatSector = getStartSectorOfActiveFat();
+	int currentSector = startFatSector + bootSector.fatSize;
+	bool recordsAreEmpty = true;
+	UCHAR* buffer = new UCHAR[bootSector.bytesInSector];
+	do {
+		--currentSector;
+		reader->ReadSector(currentSector, bootSector.bytesInSector, bootSector.bytesInSector, buffer);
+		for (int i = 0; i < bootSector.bytesInSector; i++) {
+			if (buffer[i] != 0) {
+				recordsAreEmpty = false;
+				break;
+			}
+		}
+	} while (recordsAreEmpty && currentSector !=startFatSector);
+	delete[] buffer;
+	numberOfFatRecords = (currentSector - startFatSector + 1)*bootSector.bytesInSector / 4;
+	buffer = new UCHAR[numberOfFatRecords * 4];
+	fatTable = new UINT32[numberOfFatRecords*2];
+	reader->ReadSector(startFatSector, bootSector.bytesInSector, 
+		(currentSector - startFatSector + 1)*bootSector.bytesInSector,buffer);
+	parseFatTable(buffer, numberOfFatRecords);
+	delete[] buffer;
+}
+
+
+void FileSystem::createBootSector()
+{
+	UCHAR* buffer = new UCHAR[48];
+	reader->ReadSector(0, 512, 48, buffer);
+	parseBootSector(buffer);
+	delete[] buffer;
+}
+
+void FileSystem::createRootDirectory()
+{
+	UCHAR* buffer = new UCHAR[bootSector.bytesInSector];
+	bool stop = false;
+	list<int> rootDirectoryClusters=getRootDirectoryClusters();
+	list<int>::iterator it=rootDirectoryClusters.begin();
+	advance(it, rootDirectoryClusters.size() - 1);
+	int currentSector = bootSector.reservedAreaSize + bootSector.fatSize*bootSector.fatCopiesNumber;
+	int noZeroSectors = 0;
+	for (; noZeroSectors < 8; ++noZeroSectors) {
+		reader->ReadSector(currentSector, bootSector.bytesInSector, bootSector.bytesInSector, buffer);
+		for (int j = 0; j < bootSector.bytesInSector; j+=32) {
+			if (buffer[j]==0) stop = true;
+			else break;
+		}
+		if (stop) break;
+		++currentSector;
+	}
+	delete[] buffer;
+	rootDirectorySize = (noZeroSectors)*bootSector.bytesInSector+(rootDirectoryClusters.size()-1)*bootSector.sectorsInCluster*bootSector.bytesInSector;
+	rootDirectory = new UCHAR[rootDirectorySize];
+	int rootDirectorySector = bootSector.reservedAreaSize + bootSector.fatCopiesNumber*bootSector.fatSize;
+	reader->ReadSector(rootDirectorySector, bootSector.bytesInSector, rootDirectorySize, rootDirectory);
+}
+
+void FileSystem::recovery(wstring folderName)
+{
+	UINT32 offset = 0;
+	while (offset < rootDirectorySize) {
+		if (rootDirectory[offset] != 0xe5) {
+			offset += 32;
+			continue;
+		}
+		else {
+			if (rootDirectory[offset + 11] == 0x0f) {
+				if (!isCorrectLFN(offset)) {
+					while (rootDirectory[offset + 11] == 0x0f)  offset += 32;
+					offset += 32;
+					continue;
+				}			
+				FileLfn fileLfn;
+				recoverDeletedFile(offset, fileLfn, folderName);
+				while (rootDirectory[offset + 11] == 0x0f) offset += 32;
+			}
+			else if (rootDirectory[offset + 11] == 0x20) {
+				FileInfo file;
+				recoverDeletedFile(offset, file, folderName);
+			}
+			offset += 32;
+		}
+	}
+}
+
+
+
+
+void FileSystem::recoverDeletedFile(UINT32 offset, FileInfo& fileRecord, wstring folderName)
+{
+	getFileInfo(offset, fileRecord);
+	while (rootDirectory[offset + 11] == 0x0f) offset += 32;
+	offset += 32;
+	if (!isFreeCluster(offset, fileRecord.getFirstCluster())) return;
+	list<int> clusters=getFileClusters(fileRecord);
+	UCHAR* fileContent = new UCHAR[fileRecord.getSize()];
+	UINT64 startSector = bootSector.reservedAreaSize + bootSector.fatCopiesNumber*bootSector.fatSize +
+		(fileRecord.getFirstCluster() - 2)*bootSector.sectorsInCluster;
+	reader->ReadSector(startSector, bootSector.bytesInSector, fileRecord.getSize(), fileContent);
+	wstring filePath =  folderName + fileRecord.getFileName();
+	HANDLE hFile = CreateFileW(filePath.c_str(), GENERIC_WRITE, FILE_SHARE_WRITE, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+	DWORD written;
+	WriteFile(hFile, fileContent, fileRecord.getSize(), &written, NULL);
+	delete [] fileContent;
+}
+
+
+
+bool FileSystem::isCorrectLFN(UINT32 offset)
+{
+	bool isCorrect = true;
+	while (rootDirectory[offset + 11] == 0x0f) offset += 32;
+	FileLfn fileLfn;
+	getFileInfo(offset, fileLfn);
+	if (fileLfn.getFirstCluster() == 0) isCorrect = false;
+	return isCorrect;
+}
+
+bool FileSystem::isFreeCluster(UINT32 offset, int clusterNumber)
+{
+	FileInfo file;
+	bool isFree = true;
+	offset += 32;
+	while (offset < rootDirectorySize) {
+		while (rootDirectory[offset + 11] == 0x0f) offset += 32;
+		if (clusterNumber == file.createFirstCluster(rootDirectory+offset)) {
+			isFree = false;
+			break;
+		}
+		offset += 32; 
+	}
+	return isFree;
+}
